@@ -1,92 +1,87 @@
-from typing import NamedTuple
+import re
+from itertools import product
 
-with open('01.txt', 'r') as f:
-    data = [(x.strip()[:1], int(x.strip()[1:])) for x in f.readlines()]
+with open('input') as fh:
+    data = [y for y in (x.strip() for x in fh) if y]
 
+    
+def parse_command(line):
+    if line.startswith('mask'):
+        return ('mask', line[len('mask = '):])
+    elif line.startswith('mem'):
+        return ('mem', tuple(int(x) for x in re.findall(r'\d+', line)))
+    else:
+        raise ValueError('Unknown command: %s' % line)
 
-class Point(NamedTuple):
-    x: int
-    y: int
-
-
-NORTH = Point(0, 1)
-EAST = Point(1, 0)
-SOUTH = Point(0, -1)
-WEST = Point(-1, 0)
-
-
-class Boat:
-    x = 0
-    y = 0
-    directions = (NORTH, EAST, SOUTH, WEST)
-    facing = EAST
-    dir_index = {
-        'N': NORTH,
-        'E': EAST,
-        'W': WEST,
-        'S': SOUTH
+# Part 1
+        
+def make_mask(maskstr):
+    return {
+        'con': int(maskstr.replace('X', '1'), 2),
+        'dis': int(maskstr.replace('X', '0'), 2)
     }
+    
 
-    def move(self, direction, distance):
-        for x in range(distance):
-            self.x += direction[0]
-            self.y += direction[1]
+def apply_mask(mask, n):
+    for k, v in mask.items():
+        if k == 'dis':
+            n = n | v
+        elif k == 'con':
+            n = n & v
+        else:
+            raise ValueError("Unknown mask type: %s %s" % (k, v))
+    return n
 
-    def forward(self, distance):
-        self.move(self.facing, distance)
+mask = None
+registers = {}
+for line in data:
+    cmd, arg = parse_command(line)
+    if cmd == 'mask':
+        mask = make_mask(arg)
+    else:
+        k, v = arg
+        registers[k] = apply_mask(mask, v)
 
-    def move_direction(self, direction, distance):
-        self.move(self.dir_index[direction], distance)
+part_1 = sum(registers.values())
 
-    def right(self, degrees):
-        for rotations in range(degrees // 90):
-            self.facing = (self.directions + self.directions)[self.directions.index(self.facing) + 1]
+# Part 2
 
-    def left(self, degrees):
-        for rotations in range(degrees // 90):
-            self.facing = self.directions[self.directions.index(self.facing) - 1]
+def make_floatmasks(maskstr):
+    basemask = make_mask(maskstr)
+    del basemask['con']
+    D = {
+        'base': basemask,
+        'masks': []
+    }
+    xis = [i for (i, x) in enumerate(maskstr) if x == 'X']
+    for bits in product(['0', '1'], repeat=len(xis)):
+        L = ['X'] * 36
+        for i, b in zip(xis, bits):
+            L[i] = b
+        D['masks'].append(make_mask(''.join(L)))
+    return D
 
-    def to_waypoint(self, waypoint, distance):
-        for _ in range(distance):
-            self.x += waypoint.x
-            self.y += waypoint.y
+        
+def apply_floatmasks(floatmasks, n):
+    base = apply_mask(floatmasks['base'], n)
+    masks = floatmasks['masks']
+    if not masks:
+        yield base
+    for m in masks:
+        yield apply_mask(m, base)
 
 
-class Waypoint(Boat):
-    x = 10
-    y = 1
+floatmasks = None
+registers = {}
+for line in data:
+    cmd, arg = parse_command(line)
+    if cmd == 'mask':
+        floatmasks = make_floatmasks(arg)
+        print(floatmasks)
+    else:
+        k, v = arg
+        for reg in apply_floatmasks(floatmasks, k):
+            registers[reg] = v
 
-    def right(self, degrees):
-        for rotations in range(degrees // 90):
-            self.x, self.y = self.y, -self.x
-
-    def left(self, degrees):
-        for rotations in range(degrees // 90):
-            self.x, self.y = -self.y, self.x
-
-
-boat = Boat()
-for direction, distance in data:
-    if direction in 'NEWS':
-        boat.move_direction(direction, distance)
-    elif direction == 'F':
-        boat.forward(distance)
-    elif direction == 'R':
-        boat.right(distance)
-    elif direction == 'L':
-        boat.left(distance)
-print('Part 1:', abs(boat.x) + abs(boat.y))
-
-boat = Boat()
-waypoint = Waypoint()
-for direction, distance in data:
-    if direction in 'NEWS':
-        waypoint.move_direction(direction, distance)
-    elif direction == 'F':
-        boat.to_waypoint(waypoint, distance)
-    elif direction == 'R':
-        waypoint.right(distance)
-    elif direction == 'L':
-        waypoint.left(distance)
-    print(distance, boat.x, boat.y, waypoint.x, waypoint.y)
-print('Part 2:', abs(boat.x) + abs(boat.y))
+part_2 = sum(registers.values())
+print(part_2)

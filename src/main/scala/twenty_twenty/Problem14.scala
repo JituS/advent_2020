@@ -1,8 +1,9 @@
 package twenty_twenty
 
 
-import java.math.BigInteger
+import java.lang.Math.pow
 
+import scala.collection.mutable
 import scala.io.Source
 
 object Problem14 {
@@ -14,26 +15,27 @@ object Problem14 {
     val result = input.map { line: String =>
       val bitmask :: values = line.split("\n").toList
       val mask = bitmask.replace("mask = ", "")
-      val valueReg = """mem\[(\d+)\] = (\d+)""".r
-
-      values.foldLeft(Map[Int, String]()) { (result, e) =>
-        val valueReg(mem, value) = e
-        val str = toBinary(value)
-        result + (mem.toInt -> str)
-      }.map { value: (Int, String) =>
-        val str = mask.zip(value._2)
-          .map {
-            case ('X', number) => number
-            case ('0', _) => '0'
-            case ('1', _) => '1'
-          }.mkString("")
-        (value._1, new BigInteger(str, 2).longValue())
+      val memValueRegex = """mem\[(\d+)\] = (\d+)""".r
+      values.foldLeft(mutable.LinkedHashMap[String, Long]()) { (memValueMap, memValue) =>
+        val memValueRegex(mem, value) = memValue
+        val memInBinary = toBinary(mem, 36)
+        val fluctuatingAdd = mask.zip(memInBinary).map(toFluctuatingAddress).mkString("")
+        val noOfX = fluctuatingAdd.count(_ == 'X')
+        memValueMap ++ (0 until pow(2, noOfX).toInt)
+          .map(e => toBinary(e.toString, noOfX)
+            .foldLeft(fluctuatingAdd)((result, bit) => result.replaceFirst("X", bit.toString)) -> value.toLong).toMap
       }
     }
     println(result.reduce(_ ++ _).values.sum)
   }
 
-  private def toBinary(value1: String) = {
-    "000000000000000000000000000000000000".substring(value1.toLong.toBinaryString.length) + value1.toLong.toBinaryString
+  private val toFluctuatingAddress: PartialFunction[(Char, Char), Char] = {
+    case ('X', _) => 'X'
+    case ('0', number) => number
+    case ('1', _) => '1'
+  }
+
+  private def toBinary(value: String, padding: Int) = {
+    ("0" * padding).substring(value.toLong.toBinaryString.length) + value.toLong.toBinaryString
   }
 }
